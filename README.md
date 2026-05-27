@@ -2,9 +2,8 @@
 
 ## Vidéo
 
-<p align="center">
-  <video src="assets/poc_drainer.mp4" alt="XOR C2 Client Interface" width="100%">
-</p>
+![demo](./assets/drainer.gif)
+
 
 > Document de recherche en sécurité Web3 · Usage éducatif uniquement
 
