@@ -1,7 +1,8 @@
 # 🔬 Crypto Wallet Drainers — Analyse théorique & défense
 
 ## Vidéo
-[▶ Voir la démo](./assets/poc_drainer.mp4)
+https://github.com/Xor290/Drainer-POC/blob/main/assets/poc_drainer.mp4
+
 
 > Document de recherche en sécurité Web3 · Usage éducatif uniquement
 
