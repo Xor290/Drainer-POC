@@ -37,17 +37,6 @@ type GetSolPrice struct {
 	SolPrice string `json:"sol_price"`
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-
-type LoginRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"`
-	Password string `json:"password" binding:"required,min=6"`
-}
-
-type LoginResponse struct {
-	Token string `json:"token"`
-}
-
 // ── Ban ───────────────────────────────────────────────────────────────────────
 
 type BanRequest struct {

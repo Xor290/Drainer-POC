@@ -14,19 +14,25 @@
 1. [Qu'est-ce qu'un wallet drainer ?](#1-quest-ce-quun-wallet-drainer-)
 2. [Surface d'attaque](#2-surface-dattaque)
 3. [Architecture typique](#3-architecture-typique)
-4. [Vecteurs d'infection](#4-vecteurs-dinfection)
-5. [Mécanismes techniques](#5-mécanismes-techniques)
-   - 5.1 [Détection du wallet](#51-détection-du-wallet)
-   - 5.2 [Connexion & consentement](#52-connexion--consentement)
-   - 5.3 [Extraction des fonds (EVM)](#53-extraction-des-fonds-evm)
-   - 5.4 [Extraction des fonds (Solana)](#54-extraction-des-fonds-solana)
-   - 5.5 [Techniques d'évasion](#55-techniques-dévasion)
-   - 5.6 [Exfiltration des données](#56-exfiltration-des-données)
-6. [Infrastructure C2](#6-infrastructure-c2)
-7. [Indicateurs de compromission (IOC)](#7-indicateurs-de-compromission-ioc)
-8. [Défenses & recommandations](#8-défenses--recommandations)
-9. [Ressources complémentaires](#9-ressources-complémentaires)
-10. [Disclaimer](#10-disclaimer)
+4. [Groupes Drainer-as-a-Service (DaaS)](#4-groupes-drainer-as-a-service-daas)
+   - 4.1 [Modèle économique](#41-modèle-économique)
+   - 4.2 [Groupes documentés](#42-groupes-documentés)
+   - 4.3 [Structure organisationnelle](#43-structure-organisationnelle)
+   - 4.4 [Méthodes d'attaque caractéristiques](#44-méthodes-dattaque-caractéristiques)
+5. [Vecteurs d'infection](#5-vecteurs-dinfection)
+6. [Mécanismes techniques](#6-mécanismes-techniques)
+   - 6.1 [Détection du wallet](#61-détection-du-wallet)
+   - 6.2 [Connexion & consentement](#62-connexion--consentement)
+   - 6.3 [Extraction des fonds (EVM)](#63-extraction-des-fonds-evm)
+   - 6.4 [Extraction des fonds (Solana)](#64-extraction-des-fonds-solana)
+   - 6.5 [Techniques d'évasion](#65-techniques-dévasion)
+   - 6.6 [Exfiltration des données](#66-exfiltration-des-données)
+7. [Infrastructure C2](#7-infrastructure-c2)
+8. [Indicateurs de compromission (IOC)](#8-indicateurs-de-compromission-ioc)
+9. [Défenses & recommandations](#9-défenses--recommandations)
+10. [Schémas de flux](#10-schémas-de-flux)
+11. [Ressources complémentaires](#11-ressources-complémentaires)
+12. [Disclaimer](#12-disclaimer)
 
 ---
 
@@ -76,8 +82,6 @@ flowchart TD
 
   subgraph LAYER0["👤 Attaquant"]
     ATK(["Opérateur"])
-    PANEL["🖥️ Panel admin\nJWT protégé"]
-    ATK -- "connexion admin" --> PANEL
   end
 
   subgraph LAYER1["🖥️ Serveur C2"]
@@ -121,7 +125,7 @@ flowchart TD
   end
 
   %% Flux vertical principal
-  PANEL      -- "configure destinations\nbans · RPC" --> C2CORE
+  ATK        -- "configure via .env"                 --> C2CORE
   C2CORE     -- "sert le payload JS"                 --> LAYER2
   W3         -- "window.ethereum/solana détecté"     --> FE2
   FE2        --> FE1 & FE3 & FE4 & FE5 & FE6
@@ -353,9 +357,8 @@ Le serveur de commande et contrôle joue plusieurs rôles :
 | **Proxy RPC** | Relaie les appels JSON-RPC vers des nœuds blockchain (Alchemy, Infura…), masquant la clé API au client |
 | **Gestion des bans** | Bloque les IPs des analystes/chercheurs |
 | **Notification** | Transmet les alertes vers Telegram/Discord |
-| **Panel admin** | Interface de gestion protégée par JWT |
 
-Le proxy RPC est une technique notable : plutôt que d'exposer la clé API dans le JS frontend (où elle serait visible), le backend la stocke côté serveur et proxy les requêtes. Cela complique aussi le suivi des adresses de destination par les victimes.
+Le proxy RPC est une technique notable : plutôt que d'exposer la clé API dans le JS frontend (où elle serait visible), le backend la stocke côté serveur et proxy les requêtes. Cela complique aussi le suivi des adresses de destination par les victimes. La configuration (adresses, RPC, Telegram) est gérée entièrement via variables d'environnement au démarrage du serveur.
 
 ### Architecture interne du C2
 
@@ -376,22 +379,14 @@ flowchart LR
       R4["POST /api/rpc/:chainId\n→ Proxy JSON-RPC"]
       R5["GET /api/price_eth\n→ Prix ETH temps réel"]
       R6["GET /api/price_sol\n→ Prix SOL temps réel"]
-    end
-
-    subgraph AUTH["Route auth /auth/*"]
-      R7["POST /auth/login\n→ JWT token"]
-    end
-
-    subgraph PROTECTED["Routes protégées /protected/*\n🔒 JWT requis"]
-      R8["POST /protected/ban\n→ Bannir une IP"]
+      R7["POST /api/ban\n→ Bannir une IP"]
     end
 
     subgraph MIDDLEWARE["Middleware stack"]
       M1["CORS"]
       M2["Security headers\nHSTS · X-Frame · XSS"]
       M3["Ban check\n→ vérifie IP bannies"]
-      M4["Auth JWT\n→ routes protégées"]
-      M5["Logger / Recovery"]
+      M4["Logger / Recovery"]
     end
 
     subgraph STORAGE["Stockage en mémoire"]
@@ -410,7 +405,6 @@ flowchart LR
   end
 
   subgraph ATTACKER["👤 Attaquant"]
-    ADM["Panel admin\nnavigateur"]
     TG["📲 Telegram\nalerte temps réel"]
   end
 
@@ -420,8 +414,9 @@ flowchart LR
   VICTIM -->|"POST JSON-RPC"| R4
   VICTIM -->|"GET prix"| R5
   VICTIM -->|"GET prix"| R6
+  VICTIM -->|"POST ban IP"| R7
 
-  M1 --> M2 --> M3 --> M4
+  M1 --> M2 --> M3
   M3 --> S1
 
   R1 --> EXT1 --> TG
@@ -429,15 +424,9 @@ flowchart LR
   R3 --> S3
   R4 --> EXT2 --> EXT4
   R5 & R6 --> EXT3
-
-  ADM -->|"POST /auth/login"| R7
-  R7 -->|"Bearer JWT"| ADM
-  ADM -->|"POST /protected/ban\n+ Authorization: Bearer"| R8
-  R8 --> S1
+  R7 --> S1
 
   style PUBLIC_API fill:#1a2a1a,stroke:#44aa44
-  style AUTH fill:#1a1a2a,stroke:#4444aa
-  style PROTECTED fill:#2a1a1a,stroke:#aa4444
   style MIDDLEWARE fill:#2a2a1a,stroke:#aaaa44
   style STORAGE fill:#1a2a2a,stroke:#44aaaa
   style EXTERNAL fill:#2a1a2a,stroke:#aa44aa
@@ -496,9 +485,9 @@ flowchart LR
 
 ---
 
-## 9. Schémas de flux
+## 10. Schémas de flux
 
-### 9.1 Vue d'ensemble — Cycle de vie d'une attaque
+### 10.1 Vue d'ensemble — Cycle de vie d'une attaque
 
 ```mermaid
 flowchart TD
@@ -579,7 +568,7 @@ flowchart TD
 
 ---
 
-### 9.2 Zoom — Techniques d'évasion anti-analyse
+### 10.2 Zoom — Techniques d'évasion anti-analyse
 
 ```mermaid
 flowchart LR
@@ -604,7 +593,7 @@ flowchart LR
 
 ---
 
-### 9.3 Zoom — Techniques de drain avancées (EVM)
+### 10.3 Zoom — Techniques de drain avancées (EVM)
 
 ```mermaid
 flowchart TD
@@ -630,7 +619,7 @@ flowchart TD
 
 ---
 
-## 10. Ressources complémentaires
+## 11. Ressources complémentaires
 
 - [SlowMist — Drainer incident reports](https://slowmist.com)
 - [Chainalysis — Crypto Crime Report](https://go.chainalysis.com/crypto-crime-report.html)
@@ -641,7 +630,7 @@ flowchart TD
 
 ---
 
-## 10. Disclaimer
+## 12. Disclaimer
 
 > **Ce document est fourni à des fins éducatives et de recherche en cybersécurité uniquement.**
 >

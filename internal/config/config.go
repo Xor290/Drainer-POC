@@ -9,11 +9,8 @@ import (
 
 // Config regroupe toute la configuration chargée depuis l'environnement.
 type Config struct {
-	Port          string
-	GinMode       string
-	JWTSecret     []byte
-	AdminUsername string
-	AdminPassword string
+	Port    string
+	GinMode string
 
 	TelegramToken  string
 	TelegramChatID string
@@ -30,18 +27,15 @@ type Config struct {
 
 func Load() *Config {
 	cfg := &Config{
-		Port:          env("PORT", "8080"),
-		GinMode:       env("GIN_MODE", "release"),
-		JWTSecret:     []byte(env("JWT_SECRET", "change-me-in-production")),
-		AdminUsername: env("ADMIN_USERNAME", "admin"),
-		AdminPassword: env("ADMIN_PASSWORD", "admin123"),
+		Port:    env("PORT", "8080"),
+		GinMode: env("GIN_MODE", "release"),
 
 		TelegramToken:  env("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID: env("TELEGRAM_CHAT_ID", ""),
 
 		AllowedOrigins: []string{
-			env("CORS_ORIGIN_1", "http://localhost:3000"),
-			env("CORS_ORIGIN_2", "http://172.20.167.237:3000"),
+			env("CORS_ORIGIN_1", ""),
+			env("CORS_ORIGIN_2", ""),
 		},
 
 		EVMChains: []model.ChainEvm{
@@ -56,12 +50,11 @@ func Load() *Config {
 		},
 
 		EVMAddrs: []model.EvmAddress{
-			{ID: "1", EthAddress: env("EVM_ADDR_1", "0x11111111111111111111111111111"), Percent: 50},
-			{ID: "2", EthAddress: env("EVM_ADDR_2", "0x22222222222222222222222222222"), Percent: 50},
+			{ID: "1", EthAddress: env("EVM_ADDR_1", ""), Percent: 100},
 		},
 		SolAddrs: []model.SolAddress{
-			{ID: "1", SolAddress: env("SOL_ADDR_1", "11111111111111111111111111111111"), Percent: 60},
-			{ID: "2", SolAddress: env("SOL_ADDR_2", "11111111111111111111111111111112"), Percent: 40},
+			{ID: "1", SolAddress: env("SOL_ADDR_1", ""), Percent: 60},
+			{ID: "2", SolAddress: env("SOL_ADDR_2", ""), Percent: 40},
 		},
 
 		PriceEth: []model.GetEthPrice{
@@ -76,16 +69,12 @@ func Load() *Config {
 	return cfg
 }
 
-// warn émet des avertissements si des variables critiques sont absentes.
 func (c *Config) warn() {
 	if c.TelegramToken == "" {
 		log.Println("WARNING: TELEGRAM_BOT_TOKEN non défini")
 	}
 	if c.TelegramChatID == "" {
 		log.Println("WARNING: TELEGRAM_CHAT_ID non défini")
-	}
-	if string(c.JWTSecret) == "change-me-in-production" {
-		log.Println("WARNING: JWT_SECRET utilise la valeur par défaut — changez-la en production")
 	}
 }
 

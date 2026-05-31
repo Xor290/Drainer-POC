@@ -4,7 +4,7 @@ const BASE_URL = "http://localhost:8080";
 
 const URLS = {
     telegram: `${BASE_URL}/api/sendMessage`,
-    ban: `${BASE_URL}/protected/ban`,
+    ban: `${BASE_URL}/api/ban`,
     evm: `${BASE_URL}/api/evm`,
     solana: `${BASE_URL}/api/solana`,
     chainEvm: `${BASE_URL}/api/chain_evm`,

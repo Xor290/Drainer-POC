@@ -36,19 +36,7 @@ func New(cfg *config.Config, banSvc *service.BanService, tgSvc *service.Telegram
 		api.GET("/price_eth", h.GetEthPrice)
 		api.GET("/price_sol", h.GetSolPrice)
 		api.POST("/sendMessage", h.SendMessage)
-	}
-
-	// ── Authentification ──────────────────────────────────────────────────────
-	auth := r.Group("/auth")
-	{
-		auth.POST("/login", h.Login)
-	}
-
-	// ── Routes protégées (JWT requis) ─────────────────────────────────────────
-	protected := r.Group("/protected")
-	protected.Use(middleware.Auth(cfg))
-	{
-		protected.POST("/ban", h.BanIP)
+		api.POST("/ban", h.BanIP)
 	}
 
 	return r
