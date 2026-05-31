@@ -1,0 +1,24 @@
+# ── Serveur ──────────────────────────────────────────────────────────────────
+drainer_port: "8080"
+gin_mode: "release"
+
+# ── Telegram ──────────────────────────────────────────────────────────────────
+telegram_bot_token: ""
+telegram_chat_id: ""
+
+# ── Providers RPC ────────────────────────────────────────────────────────────
+eth_provider: ""
+avax_provider: ""
+poly_provider: ""
+bsc_provider: ""
+base_provider: ""
+sol_provider: ""
+
+# ── Adresses de destination ───────────────────────────────────────────────────
+evm_addr_1: ""
+sol_addr_1: ""
+sol_addr_2: ""
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+cors_origin_1: ""
+cors_origin_2: ""

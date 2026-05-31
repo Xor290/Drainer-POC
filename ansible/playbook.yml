@@ -1,0 +1,180 @@
+- name: Installation et configuration du drainer
+  hosts: scama
+  become: true
+  gather_facts: true
+
+  vars:
+    go_version: "1.24.3"
+    app_user: drainer
+    app_dir: /opt/drainer
+    app_src: /opt/drainer/src
+    service_name: drainer
+
+  tasks:
+    # ── Dépendances système ──────────────────────────────────────────────────
+    - name: Installer les dépendances système
+      ansible.builtin.apt:
+        name:
+          - curl
+          - git
+          - build-essential
+          - ufw
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    # ── Go ───────────────────────────────────────────────────────────────────
+    - name: Vérifier si Go {{ go_version }} est installé
+      ansible.builtin.stat:
+        path: /usr/local/go/bin/go
+      register: go_binary
+
+    - name: Télécharger Go {{ go_version }}
+      ansible.builtin.get_url:
+        url: "https://go.dev/dl/go{{ go_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        mode: "0644"
+      when: not go_binary.stat.exists
+
+    - name: Extraire Go dans /usr/local
+      ansible.builtin.unarchive:
+        src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        dest: /usr/local
+        remote_src: true
+        creates: /usr/local/go/bin/go
+      when: not go_binary.stat.exists
+
+    - name: Ajouter Go au PATH système
+      ansible.builtin.copy:
+        dest: /etc/profile.d/golang.sh
+        content: |
+          export PATH=$PATH:/usr/local/go/bin
+          export GOPATH=/root/go
+        mode: "0644"
+
+    # ── Utilisateur & répertoires ────────────────────────────────────────────
+    - name: Créer l'utilisateur système {{ app_user }}
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: "{{ app_dir }}"
+        create_home: false
+
+    - name: Créer les répertoires de l'application
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0750"
+      loop:
+        - "{{ app_dir }}"
+        - "{{ app_dir }}/bin"
+        - "{{ app_src }}"
+
+    # ── Sources & compilation ────────────────────────────────────────────────
+    - name: Synchroniser les sources Go
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "{{ app_src }}/"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=ansible"
+          - "--exclude=assets"
+          - "--exclude=.env"
+          - "--exclude=*.md"
+          - "--exclude=drainer.js"
+          - "--exclude=template.html"
+        delete: true
+      notify: Compiler le binaire
+
+    - name: Forcer la compilation au premier déploiement
+      ansible.builtin.stat:
+        path: "{{ app_dir }}/bin/drainer"
+      register: drainer_bin
+
+    - name: Compiler le binaire Go (premier déploiement)
+      ansible.builtin.command:
+        cmd: /usr/local/go/bin/go build -o {{ app_dir }}/bin/drainer ./cmd/server
+        chdir: "{{ app_src }}"
+      environment:
+        HOME: /root
+        GOPATH: /root/go
+        GOCACHE: /root/.cache/go-build
+      when: not drainer_bin.stat.exists
+      notify: Redémarrer drainer
+
+    - name: Définir les permissions du binaire
+      ansible.builtin.file:
+        path: "{{ app_dir }}/bin/drainer"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0750"
+
+    # ── Configuration ────────────────────────────────────────────────────────
+    - name: Déployer le fichier d'environnement
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: "{{ app_dir }}/.env"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0640"
+      notify: Redémarrer drainer
+
+    # ── Systemd ──────────────────────────────────────────────────────────────
+    - name: Déployer l'unité systemd
+      ansible.builtin.template:
+        src: templates/drainer.service.j2
+        dest: /etc/systemd/system/{{ service_name }}.service
+        mode: "0644"
+      notify:
+        - Recharger systemd
+        - Redémarrer drainer
+
+    - name: Activer et démarrer le service drainer
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    # ── Pare-feu ─────────────────────────────────────────────────────────────
+    - name: Autoriser SSH dans ufw
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+      when: ansible_os_family == "Debian"
+
+    - name: Autoriser le port {{ drainer_port }} dans ufw
+      community.general.ufw:
+        rule: allow
+        port: "{{ drainer_port }}"
+        proto: tcp
+      when: ansible_os_family == "Debian"
+
+    - name: Activer ufw
+      community.general.ufw:
+        state: enabled
+        policy: deny
+      when: ansible_os_family == "Debian"
+
+  handlers:
+    - name: Compiler le binaire
+      ansible.builtin.command:
+        cmd: /usr/local/go/bin/go build -o {{ app_dir }}/bin/drainer ./cmd/server
+        chdir: "{{ app_src }}"
+      environment:
+        HOME: /root
+        GOPATH: /root/go
+        GOCACHE: /root/.cache/go-build
+      notify: Redémarrer drainer
+
+    - name: Recharger systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Redémarrer drainer
+      ansible.builtin.systemd:
+        name: "{{ service_name }}"
+        state: restarted
